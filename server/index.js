@@ -1,27 +1,11 @@
 require('dotenv').config()
-const cors = require('cors');
-const path = require('path');
-const express = require('express');
-const morgan = require('morgan');
+require('../Databases/mongo')
+const cors = require('cors')
+const path = require('path')
+const express = require('express')
+const morgan = require('morgan')
+const { Persons } = require('../Databases/models/Persons.models')
 const app = express()
-
-const persons =  [
-    {
-      "name": "Arto Hellas",
-      "number": "040-123456",
-      "id": 1
-    },
-    {
-      "name": "Ada Lovelace",
-      "number": "39-44-5323523",
-      "id": 2
-    },
-    {
-      "name": "Dan Abramov",
-      "number": "12-43-234345",
-      "id": 3
-    }
-  ]
 
 // morgan Middelware Token Config
 morgan.token('body',(req) => JSON.stringify(req.body))
@@ -37,69 +21,68 @@ app.use(cors())
 // Routes
 app.post('/api/persons' ,(req, res, next) => {
   if (!req.body) {
-    return next( "no hay cuerpo en la request")
+    return next( 'no hay cuerpo en la request')
   }  
   const {name ,number} = req.body
+  console.log(number ,name)
   if (!name) {
     next({error:'no hay nombre en cuerpo', status: 204})
   }else if (!number) {
     next({error:'no hay numero en cuerpo', status: 204})
-  }
-  const filter = persons.filter((p) => {
-    return  p.name.toLocaleLowerCase() === name.toLocaleLowerCase() 
-    ?p
-    :null
-  })
-  console.log(filter.length);
-  if (filter.length > 0) {
-    next({error:'ya existe este contacto', status: 203})
-  }
+  }else if (number.length < 8) {
+    next({error:'El numero debe tener mas de 8 digitos' , status: 412})
+  }else if (name.length < 3) {
+    next({error:'El numero debe tener mas de 8 digitos' , status: 412})
+  }else{
 
-  const randomID = (min, max) => {
-    return Math.floor(Math.random() * (max - min) + min);
+    const savePerson = new Persons({
+      name,
+      number
+    })
+    savePerson.save()
+      .then(result => res.json(result))
+      .catch(err => next({error: err.message , status: 409}))
   }
-  const id = randomID(persons[persons.length -1].id, 9999999)
- res.json(  {name , number , id })
- 
+  
 })
-app.get('/api/persons', (req ,res ) => {
-    res.json(persons)
+app.get('/api/persons', (req ,res ,next) => {
+  Persons.find({})
+    .then(result => res.json(result))
+    .catch(err => next({error: err.message , status: 400}))
 })
-app.get('/api/persons/:id', (req ,res ,next) => {
-  console.log(parseInt(req.params.id));
-  const filter = persons.filter((p) => {
-    return p.id === parseInt(req.params.id)
-    ? p
-    :null
-  })
-  if (filter.length > 0) {
-      res.json(filter)
-  }
-  next({error:'no hay contactos que concidan', status: 204})
+app.get('/api/persons/:name', (req ,res ,next) => {
+  const {name} = req.params
+  console.log(name)
+  Persons.find({name})
+    .then(result => res.json(result))
+    .catch(err => next({error: err.message , status: 400}))
 })
-app.delete('/api/persons/:id', (req ,res ) => {
-  console.log(parseInt(req.params.id));
-    res.json(persons.filter((p) => {
-      return p.id === parseInt(req.params.id)
-      ? null
-      :p
-    }))
+app.delete('/api/persons/:id', (req ,res , next) => {
+  const {id} = req.params
+  Persons.findByIdAndDelete({_id: id})
+    .then(result => res.json(result))
+    .catch(err => next({error: err.message , status: 400}))
+})
+app.put('/api/persons/:id', (req ,res , next) => {
+  const {id} = req.params
+  const {name , number} = req.body
+  Persons.findByIdAndUpdate({_id: id},{ name, number} )
+    .then(result => res.json(result))
+    .catch(err => next({error: err.message , status: 400}))
 })
 app.get('/api/info', (req ,res ) => {
-    res.send(`
-    <h2>La agenda cuenta con la informacion de:  ${persons.length}</h2>
-    <br/>
-    <h3>${Date()}</h3>
-    `)
+  Persons.find({})
+    .then(result => res.json({data: result.length , fecha: Date()}))
+    .catch(err => next({error: err.message , status: 400}))
 })
 app.use((err, req, res, next) => {
-  console.log('el error:',err.error, ' status:' , err.status);
-  res.send(err.error).status(err.status)
+  console.log('el error:',err.error, ' status:' , err.status)
   
+  res.status(err.status).send(err.error)
 })
 const port = process.env.PORT
 app.listen(port , () => {
-    console.log(`Server corriendo en el puerto ${port}`);
+  console.log(`Server corriendo en el puerto ${port}`)
 })
 
 
